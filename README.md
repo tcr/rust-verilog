@@ -2,10 +2,16 @@
 
 ```
 [dependencies]
-verilog = "0.1"
+verilog = "0.0.1"
 ```
 
-Parses Verilog.
+Parses and generates Verilog code.
+
+```rust
+extern crate verilog;
+
+let code: verilog::ast::Code = verilog::parse("module a(); endmodule");
+```
 
 ## License
 
