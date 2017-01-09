@@ -5,6 +5,7 @@ description = "Parser for Verilog."
 license = "MIT"
 name = "verilog"
 version = "0.0.1"
+repository = "https://github.com/tcr/rust-verilog"
 
 [build-dependencies]
 libflate = "0.1"
