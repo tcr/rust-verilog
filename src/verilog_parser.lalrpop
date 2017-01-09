@@ -41,29 +41,32 @@ pub Code: ast::Code = {
 };
 
 Toplevel: ast::Toplevel = {
-    "entity" <i:Ident> "{" <a:EntityArgs> "}"=> {
-        ast::Toplevel::Entity(i, a)
+    "module" <i:Ident> "(" <a:EntityArgs> ")" ";" <b:EntityBody> "endmodule" => {
+        ast::Toplevel::Module(i, a, b)
     },
-    "impl" <i:Ident> "{" <b:EntityBody> "}" => {
-        ast::Toplevel::Impl(i, b)
-    },
-    r"`[^`]+`" => {
-        let a = <>;
-        ast::Toplevel::VerilogLiteral(a[1..a.len()-1].to_string())
-    }
 };
 
 EntityArgs = Comma<EntityArg>;
 
-EntityArg: (ast::Ident, ast::Dir, Option<i32>) = {
+EntityArg: ast::Arg = {
     //(r"[^{}]+" "{" Inner "}")* => (),
-    <d:EntityArgType> <i:Ident> ":" "bit" "[" <a:Num> "]" => (i, d, Some(a.to_i32())),
-    <d:EntityArgType> <i:Ident> ":" "bit" => (i, d, None),
+    //<d:EntityArgType> <i:Ident> ":" "bit" "[" <a:Num> "]" => (i, d, Some(a.to_i32())),
+    //<d:EntityArgType> <i:Ident> ":" "bit" => (i, d, None),
+    <i:Ident> => (i, None, None),
+    <d:EntityArgType> "[" <a:Num> ":" <b:Num> "]" <i:Ident> => (i, None, None),
+};
+
+InnerArg: Vec<ast::Arg> = {
+    //(r"[^{}]+" "{" Inner "}")* => (),
+    //<d:EntityArgType> <i:Ident> ":" "bit" "[" <a:Num> "]" => (i, d, Some(a.to_i32())),
+    //<d:EntityArgType> <i:Ident> ":" "bit" => (i, d, None),
+    <d:EntityArgType> <i:Comma<Ident>> => i.into_iter().map(|x| (x, None, None)).collect::<Vec<_>>(),
+    <d:EntityArgType> "[" <a:Num> ":" <b:Num> "]" <i:Ident> => vec![(i, None, None)],
 };
 
 EntityArgType: ast::Dir = {
-    "out" => ast::Dir::Out,
-    "in" => ast::Dir::In,
+    "output" => ast::Dir::Out,
+    "input" => ast::Dir::In,
 };
 
 EntityBody: Vec<ast::Decl> = {
@@ -79,15 +82,15 @@ Num: ast::Expr = {
         let num = <>.to_string().replace("_", "");
         ast::Expr::Num(i32::from_str(<>).unwrap())
     },
-    r"[0-9]+d[0-9_]+" => {
+    r"[0-9]+'d[0-9_]+" => {
         let num = <>.to_string().replace("_", "").splitn(2, 'd').nth(1).unwrap().to_string();
         ast::Expr::Num(i32::from_str_radix(&num, 10).unwrap())
     },
-    r"[0-9]+b[01_]+" => {
+    r"[0-9]+'b[01_]+" => {
         let num = <>.to_string().replace("_", "").splitn(2, 'b').nth(1).unwrap().to_string();
         ast::Expr::Num(i32::from_str_radix(&num, 2).unwrap())
     },
-    r"[0-9]+x[0-9a-fA-F_]+" => {
+    r"[0-9]+'x[0-9a-fA-F_]+" => {
         let num = <>.to_string().replace("_", "").splitn(2, 'x').nth(1).unwrap().to_string();
         ast::Expr::Num(i32::from_str_radix(&num, 16).unwrap())
     },
@@ -98,57 +101,65 @@ Dimensions: Vec<ast::Expr> = {
 };
 
 DefType: bool = {
-  "def" "mut" => true,
-  "def" => false,
+  "reg" => true,
+  "wire" => false,
 };
 
 pub Decl: ast::Decl = {
+    <InnerArg> ";" => ast::Decl::InnerArg(<>),
     <m:DefType> <i:Ident> ";" => {
         if m {
-            ast::Decl::Latch(i, vec![])
+            ast::Decl::Reg(i, vec![])
         } else {
-            ast::Decl::Reg(i, vec![], None)
+            ast::Decl::Wire(i, vec![], None)
+        }
+    },
+    <m:DefType> "[" <l:Num> ":" <r:Num> "]" <i:Ident> ";" => {
+        if m {
+            ast::Decl::Reg(i, vec![])
+        } else {
+            ast::Decl::Wire(i, vec![], None)
         }
     },
     <m:DefType> <i:Ident> "=" <v:Expr> ";" => {
         assert_eq!(m, false, "Cannot declare initial value with mutable def.");
-        ast::Decl::Reg(i, vec![], Some(v))
+        ast::Decl::Wire(i, vec![], Some(v))
     },
     <m:DefType> <i:Ident> ":" "bit" ";" => {
         if m {
-            ast::Decl::Latch(i, vec![])
+            ast::Decl::Reg(i, vec![])
         } else {
-            ast::Decl::Reg(i, vec![], None)
+            ast::Decl::Wire(i, vec![], None)
         }
     },
     <m:DefType> <i:Ident> ":" "bit" "=" <v:Expr> ";" => {
         assert_eq!(m, false, "Cannot declare initial value with mutable def.");
-        ast::Decl::Reg(i, vec![], Some(v))
+        ast::Decl::Wire(i, vec![], Some(v))
     },
     <m:DefType> <i:Ident> ":" "bit" <a:Dimensions> ";" => {
         if m {
-            ast::Decl::Latch(i, a)
+            ast::Decl::Reg(i, a)
         } else {
-            ast::Decl::Reg(i, a, None)
+            ast::Decl::Wire(i, a, None)
         }
     },
     <m:DefType> <i:Ident> ":" "bit" <a:Dimensions> "=" <v:Expr> ";" => {
         assert_eq!(m, false, "Cannot declare initial value with mutable def.");
-        ast::Decl::Reg(i, a, Some(v))
+        ast::Decl::Wire(i, a, Some(v))
     },
     <m:DefType> <i:Ident> ":" "uint" "{" <d:Num?> ".." <a:Num> "}" ";" => {
         let width = u32::next_power_of_two(a.to_i32() as u32).trailing_zeros();
         let dims = vec![ast::Expr::Num(width as i32)];
         if m {
-            ast::Decl::Latch(i, dims)
+            ast::Decl::Reg(i, dims)
         } else {
-            ast::Decl::Reg(i, dims, None)
+            ast::Decl::Wire(i, dims, None)
         }
     },
     <m:DefType> <i:Ident> ":" "uint" "{" <d:Num?> ".." <a:Num> "}" "=" <v:Expr> ";" => {
         assert_eq!(m, false, "Cannot declare initial value with mutable def.");
         let width = u32::next_power_of_two(a.to_i32() as u32).trailing_zeros();
-        ast::Decl::Reg(i, vec![ast::Expr::Num(width as i32)], Some(v))
+        ast::Decl::Wire(i, vec![ast::Expr::Num(width as i32)], Some(v))
     },
     <m:DefType> <i:Ident> "=" <e:Ident> "{" <args:Comma<KeyPair>> "}" ";" => {
         assert_eq!(m, false, "Cannot declare Entity as mut.");
@@ -157,11 +168,8 @@ pub Decl: ast::Decl = {
     "const" <i:Ident> "=" <v:Expr> ";" => {
         ast::Decl::Const(i, v)
     },
-    "on" <sig:Ident> "." <edge:Edge> "{" <b:SeqStatements> "}" => {
-        ast::Decl::On(ast::EdgeRef(sig, edge), b)
-    },
-    <b:CombStatement> ";" => {
-        ast::Decl::Always(ast::SeqBlock(vec![b]))
+    "always" "@(" <edge:Edge> <sig:Ident> ")" <b:CombStatementBlock<"">> => {
+        ast::Decl::Always(ast::EdgeRef(sig, edge), b)
     },
 };
 
@@ -180,28 +188,28 @@ CombStatements: ast::SeqBlock = {
     <Semicolon<CombStatement>> => ast::SeqBlock(<>),
 };
 
+CombStatementBlock<I>: ast::SeqBlock = {
+    "begin" <CombStatements> "end" => <>,
+    <CombStatement> if I == "" => ast::SeqBlock(vec![<>]),
+};
+
 CombStatement: ast::Seq = {
-    "if" <c:Expr> "{" <t:CombStatements> "}"
-    <clauses:("else" "if" <Expr> "{" <CombStatements> "}")*>
-    <e:("else" "{" <CombStatements> "}")?> => {
-        let mut els = e;
-        for (cexpr, cblock) in clauses.into_iter().rev() {
-          els = Some(ast::SeqBlock(vec![ast::Seq::If(cexpr, cblock, els)]));
-        }
-        ast::Seq::If(c, t, els)
+    "if" "(" <c:Expr> ")" <t:CombStatementBlock<"I">>
+    <e:("else" <CombStatementBlock<"">>)?> => {
+        ast::Seq::If(c, t, e)
     },
     "match" <cond:Expr> "{" <arms:MatchArmComb+> "}" => {
         ast::Seq::Match(cond, arms)
     },
 
-    <i:Ident> "=" <v:Expr> => {
-        ast::Seq::Set(ast::BlockType::Static, i, v)
+    <i:Ident> <b:BlockType> <v:Expr> ";" => {
+        ast::Seq::Set(b, i, v)
     },
-    <i:Ident> "[" <idx:Expr> "]" "=" <v:Expr> => {
-        ast::Seq::SetIndex(ast::BlockType::Static, i, idx, v)
+    <i:Ident> "[" <idx:Expr> "]" <b:BlockType> <v:Expr> ";" => {
+        ast::Seq::SetIndex(b, i, idx, v)
     },
-    <i:Ident> "[" <from:Expr> ":" <to:Expr> "]" "=" <v:Expr> => {
-        ast::Seq::SetRange(ast::BlockType::Static, i, from, to, v)
+    <i:Ident> "[" <from:Expr> ":" <to:Expr> "]" <b:BlockType> <v:Expr> ";" => {
+        ast::Seq::SetRange(b, i, from, to, v)
     },
 };
 
@@ -276,7 +284,7 @@ FsmArm: (ast::Ident, ast::SeqBlock) = {
 };
 
 BlockType: ast::BlockType = {
-    ":=" => ast::BlockType::Blocking,
+    "=" => ast::BlockType::Blocking,
     "<=" => ast::BlockType::NonBlocking,
 };
 

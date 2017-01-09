@@ -3,13 +3,11 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Code(pub Vec<Toplevel>);
 
-pub type Arg = (Ident, Dir, Option<i32>);
+pub type Arg = (Ident, Option<Dir>, Option<i32>);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Toplevel {
-    Entity(Ident, Vec<Arg>),
-    Impl(Ident, Vec<Decl>),
-    VerilogLiteral(String),
+    Module(Ident, Vec<Arg>, Vec<Decl>),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -32,12 +30,12 @@ pub struct EdgeRef(pub Ident, pub Edge);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Decl {
-    Latch(Ident, Vec<Expr>),
-    Reg(Ident, Vec<Expr>, Option<Expr>),
+    InnerArg(Vec<Arg>),
+    Reg(Ident, Vec<Expr>),
+    Wire(Ident, Vec<Expr>, Option<Expr>),
     Let(Ident, Ident, Vec<(Ident, Expr)>),
     Const(Ident, Expr),
-    On(EdgeRef, SeqBlock),
-    Always(SeqBlock),
+    Always(EdgeRef, SeqBlock),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
