@@ -92,7 +92,7 @@ impl ToVerilog for ast::Toplevel {
                 format!("module {name} ({args}\n);{decls}\nendmodule\n",
                     name=name,
                     args=args.iter()
-                        .map(|a| format!("\n{}", (a.0).0))
+                        .map(|a| format!("\n    {}", (a.0).0))
                         .collect::<Vec<_>>()
                         .join(","),
                     decls=decls.iter()
@@ -104,13 +104,26 @@ impl ToVerilog for ast::Toplevel {
     }
 }
 
+impl ToVerilog for ast::Dir {
+    fn to_verilog(&self) -> String {
+        match self {
+            &ast::Dir::Output => "output".to_string(),
+            &ast::Dir::Input => "input".to_string(),
+        }
+    }
+}
+
 impl ToVerilog for ast::Decl {
     fn to_verilog(&self) -> String {
         match self {
             &ast::Decl::InnerArg(ref args) => {
                 format!("\n{args};",
                     args=args.iter()
-                        .map(|a| format!("{}", (a.0).0))
+                        .map(|a| if let Some(ref dir) = a.1 {
+                            format!("{} {}", dir.to_verilog(), (a.0).0)
+                        } else {
+                            format!("{}", (a.0).0)
+                        })
                         .collect::<Vec<_>>()
                         .join(", "))
             }
@@ -159,12 +172,14 @@ impl ToVerilog for ast::Seq {
 
 impl ToVerilog for ast::SeqBlock {
     fn to_verilog(&self) -> String {
-        if (self.0).len() == 0 {
-            panic!("should be > 0")
-        } else if (self.0).len() == 1 {
-            (self.0)[0].to_verilog()
-        } else {
-            format!("\nbegin{}\nend", self.0.iter().map(|x| x.to_verilog()).collect::<Vec<_>>().join(""))
+        match self {
+            &ast::SeqBlock::Single(ref seq) => {
+                seq.to_verilog()
+            }
+            &ast::SeqBlock::Block(ref multi) => {
+                assert!(multi.len() > 0);
+                format!("\nbegin{}\nend", multi.iter().map(|x| x.to_verilog()).collect::<Vec<_>>().join(""))
+            }
         }
     }
 }

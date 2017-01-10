@@ -15,8 +15,8 @@ pub struct Ident(pub String);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Dir {
-    In,
-    Out,
+    Input,
+    Output,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -39,7 +39,10 @@ pub enum Decl {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct SeqBlock(pub Vec<Seq>);
+pub enum SeqBlock {
+    Block(Vec<Seq>),
+    Single(Box<Seq>),
+}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum BlockType {
@@ -55,27 +58,7 @@ pub enum Seq {
     SetIndex(BlockType, Ident, Expr, Expr),
     SetRange(BlockType, Ident, Expr, Expr, Expr),
     Match(Expr, Vec<(Vec<Expr>, SeqBlock)>),
-
-    While(Expr, SeqBlock),
-    Loop(SeqBlock),
-    Async(SeqBlock),
-    FsmCaseTransition(Ident),
-    Fsm(Vec<(Ident, SeqBlock)>),
-    Yield,
-    Await(Expr),
-
-    FsmCase(Vec<(Vec<i32>, SeqBlock)>),
-    FsmTransition(u32),
 }
-
-//#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-//pub struct CombBlock(pub Vec<Comb>);
-//
-//#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-//pub enum Comb {
-//    If(Expr, CombBlock, Option<CombBlock>),
-//    Assign(Ident, Expr),
-//}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Op {
@@ -112,10 +95,6 @@ pub enum Expr {
     Arith(Op, Box<Expr>, Box<Expr>),
     Unary(UnaryOp, Box<Expr>),
     Num(i32),
-    Placeholder,
-
-    FsmEq(BTreeSet<i32>),
-    FsmNe(BTreeSet<i32>),
 }
 
 impl Expr {

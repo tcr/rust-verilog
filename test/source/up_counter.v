@@ -18,9 +18,9 @@ reset      // reset Input
  reg [7:0] out;
 //-------------Code Starts Here-------
  always @(posedge clk)
- if (reset)
+ if (reset) begin
    out <= 8'b0 ;
- else if (enable) begin
+ end else if (enable) begin
    out <= out + 1;
  end
 endmodule

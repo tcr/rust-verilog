@@ -60,13 +60,13 @@ InnerArg: Vec<ast::Arg> = {
     //(r"[^{}]+" "{" Inner "}")* => (),
     //<d:EntityArgType> <i:Ident> ":" "bit" "[" <a:Num> "]" => (i, d, Some(a.to_i32())),
     //<d:EntityArgType> <i:Ident> ":" "bit" => (i, d, None),
-    <d:EntityArgType> <i:Comma<Ident>> => i.into_iter().map(|x| (x, None, None)).collect::<Vec<_>>(),
-    <d:EntityArgType> "[" <a:Num> ":" <b:Num> "]" <i:Ident> => vec![(i, None, None)],
+    <d:EntityArgType> <i:Comma<Ident>> => i.into_iter().map(|x| (x, Some(d.clone()), None)).collect::<Vec<_>>(),
+    <d:EntityArgType> "[" <a:Num> ":" <b:Num> "]" <i:Ident> => vec![(i, Some(d.clone()), None)],
 };
 
 EntityArgType: ast::Dir = {
-    "output" => ast::Dir::Out,
-    "input" => ast::Dir::In,
+    "output" => ast::Dir::Output,
+    "input" => ast::Dir::Input,
 };
 
 EntityBody: Vec<ast::Decl> = {
@@ -116,9 +116,9 @@ pub Decl: ast::Decl = {
     },
     <m:DefType> "[" <l:Num> ":" <r:Num> "]" <i:Ident> ";" => {
         if m {
-            ast::Decl::Reg(i, vec![])
+            ast::Decl::Reg(i, vec![l, r])
         } else {
-            ast::Decl::Wire(i, vec![], None)
+            ast::Decl::Wire(i, vec![l, r], None)
         }
     },
     <m:DefType> <i:Ident> "=" <v:Expr> ";" => {
@@ -185,12 +185,12 @@ Edge: ast::Edge = {
 };
 
 CombStatements: ast::SeqBlock = {
-    <Semicolon<CombStatement>> => ast::SeqBlock(<>),
+    <Semicolon<CombStatement>> => ast::SeqBlock::Block(<>),
 };
 
 CombStatementBlock<I>: ast::SeqBlock = {
     "begin" <CombStatements> "end" => <>,
-    <CombStatement> if I == "" => ast::SeqBlock(vec![<>]),
+    <CombStatement> if I == "" => ast::SeqBlock::Single(Box::new(<>)),
 };
 
 CombStatement: ast::Seq = {
@@ -215,7 +215,7 @@ CombStatement: ast::Seq = {
 
 MatchArmComb: (Vec<ast::Expr>, ast::SeqBlock) = {
     <e:Pipe<Literal>> "=>" <s:CombStatement> "," => {
-        (e, ast::SeqBlock(vec![s]))
+        (e, ast::SeqBlock::Block(vec![s]))
     },
     <e:Pipe<Literal>> "=>" "{" <b:CombStatements> "}" ","? => {
         (e, b)
@@ -223,7 +223,7 @@ MatchArmComb: (Vec<ast::Expr>, ast::SeqBlock) = {
 };
 
 SeqStatements: ast::SeqBlock = {
-    <SeqStatement*> => ast::SeqBlock(<>),
+    <SeqStatement*> => ast::SeqBlock::Block(<>),
 };
 
 pub SeqStatement: ast::Seq = {
@@ -232,37 +232,13 @@ pub SeqStatement: ast::Seq = {
     <e:("else" "{" <SeqStatements> "}")?> => {
         let mut els = e;
         for (cexpr, cblock) in clauses.into_iter().rev() {
-          els = Some(ast::SeqBlock(vec![ast::Seq::If(cexpr, cblock, els)]));
+          els = Some(ast::SeqBlock::Block(vec![ast::Seq::If(cexpr, cblock, els)]));
         }
         ast::Seq::If(c, t, els)
     },
-    "match" <cond:Expr> "{" <arms:MatchArmSeq+> "}" ";"? => {
+    "case" <cond:Expr> "{" <arms:MatchArmSeq+> "}" ";"? => {
         ast::Seq::Match(cond, arms)
     },
-
-    "while" <c:Expr> "{" <b:SeqStatements> "}" ";"? => {
-        ast::Seq::While(c, b)
-    },
-    "loop" "{" <b:SeqStatements> "}" ";"? => {
-        ast::Seq::Loop(b)
-    },
-    "sequence" "{" <b:SeqStatements> "}" ";"? => {
-        ast::Seq::Async(b)
-    },
-    "yield" ";" => {
-        ast::Seq::Yield
-    },
-    "await" <e:Expr> ";" => {
-        ast::Seq::Await(e)
-    },
-
-    "fsm" "<=" <i:Ident> ";" => {
-        ast::Seq::FsmCaseTransition(i)
-    },
-    "fsm" "{" <b:FsmArm+> "}" ";"? => {
-        ast::Seq::Fsm(b)
-    },
-
     <i:Ident> <b:BlockType> <v:Expr> ";" => {
         ast::Seq::Set(b, i, v)
     },
@@ -274,15 +250,6 @@ pub SeqStatement: ast::Seq = {
     },
 };
 
-FsmArm: (ast::Ident, ast::SeqBlock) = {
-    <i:Ident> "=>" <s:SeqStatement> "," => {
-        (i, ast::SeqBlock(vec![s]))
-    },
-    <i:Ident> "=>" "{" <b:SeqStatements> "}" ","? => {
-        (i, b)
-    },
-};
-
 BlockType: ast::BlockType = {
     "=" => ast::BlockType::Blocking,
     "<=" => ast::BlockType::NonBlocking,
@@ -290,7 +257,7 @@ BlockType: ast::BlockType = {
 
 MatchArmSeq: (Vec<ast::Expr>, ast::SeqBlock) = {
     <e:Pipe<Literal>> "=>" <s:SeqStatement> "," => {
-        (e, ast::SeqBlock(vec![s]))
+        (e, ast::SeqBlock::Block(vec![s]))
     },
     <e:Pipe<Literal>> "=>" "{" <b:SeqStatements> "}" ","? => {
         (e, b)
@@ -334,7 +301,6 @@ Expr4: ast::Expr = {
 };
 
 Literal: ast::Expr = {
-    "_" => ast::Expr::Placeholder,
     Ident => ast::Expr::Ref(<>),
     Num => <>,
 };
