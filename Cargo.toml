@@ -1,6 +1,5 @@
 [package]
 authors = ["Tim Ryan <tim@timryan.org>"]
-build = "build.rs"
 description = "Parser for Verilog."
 license = "MIT"
 name = "verilog"
