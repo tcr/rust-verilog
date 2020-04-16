@@ -1,8 +1,8 @@
-extern crate lalrpop_util;
+#[macro_use] extern crate lalrpop_util;
 extern crate regex;
 
 pub mod ast;
-pub mod verilog_parser;
+lalrpop_mod!(pub verilog_parser);
 
 pub use lalrpop_util::ParseError as ParseError;
 use regex::Regex;
@@ -50,7 +50,7 @@ where C: Debug, T: Debug, E: Debug {
             panic!("{:?}", res);
         }
         Err(ParseError::UnrecognizedToken {
-            token: Some((loc, _, _)),
+            token: (loc, _, _),
             ..
         }) => {
             println!("Error: Unrecognized token:");
@@ -69,7 +69,7 @@ pub fn parse(code: &str) -> ast::Code {
     let re = Regex::new(r"(?m)//.*").unwrap();
     let code = re.replace_all(&code, "");
 
-    parse_results(&code, verilog_parser::parse_Code(&code))
+    parse_results(&code, verilog_parser::CodeParser::new().parse(&code))
 }
 
 trait ToVerilog {
